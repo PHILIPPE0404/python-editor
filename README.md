@@ -20,7 +20,6 @@ Un éditeur de code Python léger et complet basé sur **Flask** et **Ace Editor
 
 ## 🛠️ Structure du Projet
 
-```text
 python-editor/
 ├── app.py              # Application Flask principale (Routes & Logique)
 ├── requirements.txt    # Dépendances Python
@@ -28,11 +27,15 @@ python-editor/
 ├── .gitignore          # Fichiers ignorés par Git
 └── templates/
     └── index.html      # Interface utilisateur et éditeur Ace
-🚀 Installation & Lancement en Local
+    
+## 🚀 Installation & Lancement en Local
+
+
 1. Cloner le dépôt
 Bash
 git clone [https://github.com/votre-compte/python-editor.git](https://github.com/votre-compte/python-editor.git)
 cd python-editor
+
 2. Créer un environnement virtuel
 Bash
 python -m venv venv
@@ -40,14 +43,18 @@ python -m venv venv
 source venv/bin/activate
 # Sur Windows :
 venv\Scripts\activate
+
 3. Installer les dépendances
 Bash
 pip install -r requirements.txt
+
 4. Lancer l'application
 Bash
 python app.py
 L'application sera accessible sur http://localhost:5000.
-☁️ Déploiement sur Render
+
+## ☁️ Déploiement sur Render
+
 Push ton projet sur GitHub.
 Rends-toi sur Render.com et crée un nouveau Web Service.
 Connecte ton dépôt GitHub.
@@ -55,6 +62,8 @@ Renseigne les commandes suivantes :
 Build Command : pip install -r requirements.txt
 Start Command : gunicorn app:app
 Clique sur Create Web Service.
-🛡️ Sécurité & Limitations
+
+## 🛡️ Sécurité & Limitations
+
 Les exécutions de scripts ont un timeout par défaut fixé à 10 secondes pour éviter le blocage du serveur.
 L'installation de modules via pip s'effectue directement dans l'environnement du serveur de déploiement
