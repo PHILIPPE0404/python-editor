@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Éditeur Python Web</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Segoe UI', sans-serif; background: #1e1e1e; color: #fff; height: 100vh; display: flex; flex-direction: column; }
+        header { background: #2d2d2d; padding: 10px 20px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; border-bottom: 1px solid #3c3c3c; }
+        button, input[type="button"], label.btn { background: #0e639c; color: white; border: none; padding: 8px 14px; cursor: pointer; border-radius: 4px; font-size: 14px; }
+        button:hover, label.btn:hover { background: #1177bb; }
+        input[type="text"] { background: #3c3c3c; color: white; border: 1px solid #555; padding: 7px; border-radius: 4px; font-size: 14px; }
+        .main-container { display: flex; flex: 1; overflow: hidden; }
+        .sidebar { width: 220px; background: #252526; border-right: 1px solid #3c3c3c; padding: 15px; overflow-y: auto; }
+        .sidebar h3 { font-size: 14px; margin-bottom: 10px; color: #888; text-transform: uppercase; }
+        .sidebar ul { list-style: none; }
+        .sidebar li { margin-bottom: 8px; cursor: pointer; color: #4ec9b0; word-break: break-all; }
+        .editor-section { flex: 1; display: flex; flex-direction: column; }
+        #editor { flex: 2; width: 100%; font-size: 14px; }
+        .console-section { flex: 1; background: #1e1e1e; border-top: 1px solid #3c3c3c; display: flex; flex-direction: column; }
+        .console-header { background: #252526; padding: 6px 15px; font-size: 12px; font-weight: bold; color: #aaa; }
+        #console-output { flex: 1; padding: 15px; font-family: 'Courier New', monospace; font-size: 13px; color: #4af626; overflow-y: auto; white-space: pre-wrap; }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.7/ace.js"></script>
+</head>
+<body>
+
+<header>
+    <input type="text" id="filename" value="main.py" placeholder="Nom du fichier">
+    <button onclick="runCode()" style="background: #28a745;">▶ Exécuter</button>
+    <button onclick="saveToDB()">💾 Sauvegarder (BDB)</button>
+    
+    <label class="btn">📂 Importer
+        <input type="file" id="file-input" onchange="importFile(event)" accept=".py" style="display:none;">
+    </label>
+    
+    <form id="export-form" action="/export" method="POST" style="display:inline;">
+        <input type="hidden" name="filename" id="export-filename">
+        <input type="hidden" name="code" id="export-code">
+        <button type="button" onclick="exportFile()">📥 Exporter (.py)</button>
+    </form>
+
+    <div style="margin-left: auto; display: flex; gap: 5px;">
+        <input type="text" id="package-name" placeholder="ex: requests">
+        <button onclick="installPackage()">📦 Installer Lib</button>
+    </div>
+</header>
+
+<div class="main-container">
+    <div class="sidebar">
+        <h3>Fichiers (BDB)</h3>
+        <ul>
+            {% for script in scripts %}
+                <li onclick="loadScript({{ script.id }})">📄 {{ script.filename }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    
+    <div class="editor-section">
+        <div id="editor">print("Hello, World!")</div>
+        <div class="console-section">
+            <div class="console-header">CONSOLE DE SORTIE</div>
+            <div id="console-output">Appuie sur Exécuter pour voir le résultat...</div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const editor = ace.edit("editor");
+    editor.setTheme("ace/theme/monokai");
+    editor.session.setMode("ace/mode/python");
+
+    async function runCode() {
+        const output = document.getElementById('console-output');
+        output.innerText = "Exécution en cours...";
+        const res = await fetch('/run', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ code: editor.getValue() })
+        });
+        const data = await res.json();
+        output.innerText = data.stdout || data.stderr || "Programme exécuté sans sortie.";
+    }
+
+    async function installPackage() {
+        const pkg = document.getElementById('package-name').value;
+        const output = document.getElementById('console-output');
+        if (!pkg) return;
+        output.innerText = `Installation de ${pkg}...`;
+        const res = await fetch('/install', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ package: pkg })
+        });
+        const data = await res.json();
+        output.innerText = data.output;
+    }
+
+    async function saveToDB() {
+        const filename = document.getElementById('filename').value;
+        const code = editor.getValue();
+        await fetch('/save', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ filename, code })
+        });
+        window.location.reload();
+    }
+
+    async function loadScript(id) {
+        const res = await fetch('/load/' + id);
+        const data = await res.json();
+        document.getElementById('filename').value = data.filename;
+        editor.setValue(data.content, -1);
+    }
+
+    function importFile(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        document.getElementById('filename').value = file.name;
+        const reader = new FileReader();
+        reader.onload = (evt) => editor.setValue(evt.target.result, -1);
+        reader.readAsText(file);
+    }
+
+    function exportFile() {
+        document.getElementById('export-filename').value = document.getElementById('filename').value;
+        document.getElementById('export-code').value = editor.getValue();
+        document.getElementById('export-form').submit();
+    }
+</script>
+
+</body>
+</html>
