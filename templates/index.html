@@ -2,131 +2,542 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <title>Éditeur Python Web</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Python Cloud Studio IDE</title>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/loader.min.js"></script>
+
     <style>
+        :root {
+            --bg-main: #181825;
+            --bg-sidebar: #1e1e2e;
+            --bg-editor: #1e1e2e;
+            --bg-console: #11111b;
+            --bg-header: #11111b;
+            --accent-blue: #89b4fa;
+            --accent-green: #a6e3a1;
+            --accent-red: #f38ba8;
+            --accent-yellow: #f9e2af;
+            --border-color: #313244;
+            --text-main: #cdd6f4;
+            --text-dim: #a6adc8;
+        }
+
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Segoe UI', sans-serif; background: #1e1e1e; color: #fff; height: 100vh; display: flex; flex-direction: column; }
-        header { background: #2d2d2d; padding: 10px 20px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; border-bottom: 1px solid #3c3c3c; }
-        button, input[type="button"], label.btn { background: #0e639c; color: white; border: none; padding: 8px 14px; cursor: pointer; border-radius: 4px; font-size: 14px; }
-        button:hover, label.btn:hover { background: #1177bb; }
-        input[type="text"] { background: #3c3c3c; color: white; border: 1px solid #555; padding: 7px; border-radius: 4px; font-size: 14px; }
-        .main-container { display: flex; flex: 1; overflow: hidden; }
-        .sidebar { width: 220px; background: #252526; border-right: 1px solid #3c3c3c; padding: 15px; overflow-y: auto; }
-        .sidebar h3 { font-size: 14px; margin-bottom: 10px; color: #888; text-transform: uppercase; }
-        .sidebar ul { list-style: none; }
-        .sidebar li { margin-bottom: 8px; cursor: pointer; color: #4ec9b0; word-break: break-all; }
-        .editor-section { flex: 1; display: flex; flex-direction: column; }
-        #editor { flex: 2; width: 100%; font-size: 14px; }
-        .console-section { flex: 1; background: #1e1e1e; border-top: 1px solid #3c3c3c; display: flex; flex-direction: column; }
-        .console-header { background: #252526; padding: 6px 15px; font-size: 12px; font-weight: bold; color: #aaa; }
-        #console-output { flex: 1; padding: 15px; font-family: 'Courier New', monospace; font-size: 13px; color: #4af626; overflow-y: auto; white-space: pre-wrap; }
+        body { font-family: 'Inter', system-ui, sans-serif; background: var(--bg-main); color: var(--text-main); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+        header { background: var(--bg-header); border-bottom: 1px solid var(--border-color); height: 50px; display: flex; align-items: center; padding: 0 15px; gap: 12px; z-index: 100; }
+        .logo { font-weight: 700; font-size: 16px; color: var(--accent-blue); display: flex; align-items: center; gap: 8px; margin-right: 15px; }
+        
+        .btn { background: #313244; color: var(--text-main); border: 1px solid #45475a; padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: all 0.2s; }
+        .btn:hover { background: #45475a; color: #fff; }
+        .btn-success { background: #234731; color: var(--accent-green); border-color: #2e5c3e; }
+        .btn-success:hover { background: #2e5c3e; }
+        .btn-danger { background: #52232d; color: var(--accent-red); border-color: #6b2d3b; }
+        .btn-danger:hover { background: #6b2d3b; }
+
+        .project-title { background: transparent; border: 1px solid transparent; color: var(--text-main); font-weight: 600; font-size: 14px; padding: 4px 8px; border-radius: 4px; }
+        .project-title:focus { border-color: var(--accent-blue); outline: none; background: #1e1e2e; }
+
+        .ide-container { flex: 1; display: flex; height: calc(100vh - 75px); position: relative; }
+
+        .sidebar { width: 240px; background: var(--bg-sidebar); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; transition: all 0.3s ease; }
+        .sidebar-header { padding: 12px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-dim); border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; }
+        .file-tree { flex: 1; overflow-y: auto; padding: 8px 0; }
+        .file-item { padding: 8px 16px; font-size: 13px; color: var(--text-main); cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 8px; border-left: 3px solid transparent; }
+        .file-item:hover { background: #2a2b3d; }
+        .file-item.active { background: #313244; border-left-color: var(--accent-blue); font-weight: 600; }
+        .file-actions { display: none; gap: 6px; }
+        .file-item:hover .file-actions { display: flex; }
+        .file-actions i { font-size: 12px; color: var(--text-dim); }
+        .file-actions i:hover { color: var(--accent-red); }
+
+        .workspace { flex: 1; display: flex; flex-direction: column; background: var(--bg-main); overflow: hidden; position: relative; }
+
+        .tabs-bar { height: 38px; background: var(--bg-header); border-bottom: 1px solid var(--border-color); display: flex; overflow-x: auto; align-items: center; }
+        .tab { height: 100%; padding: 0 16px; background: #181825; color: var(--text-dim); border-right: 1px solid var(--border-color); font-size: 13px; display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
+        .tab.active { background: var(--bg-editor); color: var(--accent-blue); border-top: 2px solid var(--accent-blue); font-weight: 500; }
+        .tab-close { font-size: 11px; border-radius: 50%; padding: 2px; }
+        .tab-close:hover { background: #45475a; color: #fff; }
+
+        .editor-container { flex: 6; position: relative; width: 100%; height: 100%; }
+        #monaco-editor { width: 100%; height: 100%; }
+
+        .console-panel { flex: 4; background: var(--bg-console); border-top: 1px solid var(--border-color); display: flex; flex-direction: column; position: relative; transition: all 0.3s ease; }
+        .console-header { height: 35px; background: #181825; padding: 0 12px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border-color); font-size: 12px; font-weight: 600; color: var(--text-dim); }
+        
+        .console-output { flex: 1; padding: 12px; font-family: 'JetBrains Mono', Consolas, monospace; font-size: 13px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; color: var(--accent-green); }
+        
+        .console-input-bar { display: flex; border-top: 1px solid var(--border-color); background: #181825; padding: 6px 12px; gap: 8px; align-items: center; }
+        .console-prompt { color: var(--accent-yellow); font-family: monospace; font-weight: bold; }
+        .console-input { flex: 1; background: #11111b; border: 1px solid var(--border-color); color: #fff; padding: 6px 10px; border-radius: 4px; font-family: monospace; font-size: 13px; outline: none; }
+        .console-input:focus { border-color: var(--accent-blue); }
+
+        .workspace.fullscreen-editor .console-panel { display: none !important; }
+        .workspace.fullscreen-editor .editor-container { flex: 1 !important; }
+        
+        .workspace.fullscreen-console .editor-container { display: none !important; }
+        .workspace.fullscreen-console .tabs-bar { display: none !important; }
+        .workspace.fullscreen-console .console-panel { flex: 1 !important; }
+
+        .error-card { background: #2a1b24; border: 1px solid #f38ba8; border-radius: 6px; padding: 10px 14px; margin: 8px 0; color: #f38ba8; font-family: sans-serif; font-size: 13px; }
+        .error-card-header { display: flex; justify-content: space-between; align-items: center; font-weight: 700; margin-bottom: 6px; }
+        .error-copy-btn { background: #f38ba8; color: #11111b; border: none; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; cursor: pointer; }
+        .error-copy-btn:hover { background: #fff; }
+
+        footer { height: 25px; background: #11111b; border-top: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; padding: 0 15px; font-size: 11px; color: var(--text-dim); }
+        .status-item { display: flex; align-items: center; gap: 6px; }
+
+        .error-line-highlight { background: rgba(243, 139, 168, 0.25) !important; width: 100% !important; }
+
+        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 1000; justify-content: center; align-items: center; }
+        .modal-content { background: var(--bg-sidebar); border: 1px solid var(--border-color); border-radius: 8px; padding: 20px; width: 400px; color: var(--text-main); }
+        .modal-content h3 { margin-bottom: 12px; }
+        .modal-content input { width: 100%; padding: 8px; background: var(--bg-main); border: 1px solid var(--border-color); color: #fff; border-radius: 4px; margin-bottom: 12px; }
     </style>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.7/ace.js"></script>
 </head>
 <body>
 
 <header>
-    <input type="text" id="filename" value="main.py" placeholder="Nom du fichier">
-    <button onclick="runCode()" style="background: #28a745;">▶ Exécuter</button>
-    <button onclick="saveToDB()">💾 Sauvegarder (BDB)</button>
+    <div class="logo">
+        <i class="fa-brands fa-python"></i> Python Studio
+    </div>
     
-    <label class="btn">📂 Importer
-        <input type="file" id="file-input" onchange="importFile(event)" accept=".py" style="display:none;">
-    </label>
+    <input type="text" id="project-name" class="project-title" value="Mon Projet Python">
     
-    <form id="export-form" action="/export" method="POST" style="display:inline;">
-        <input type="hidden" name="filename" id="export-filename">
-        <input type="hidden" name="code" id="export-code">
-        <button type="button" onclick="exportFile()">📥 Exporter (.py)</button>
-    </form>
+    <button class="btn btn-success" onclick="runProject()">
+        <i class="fa-solid fa-play"></i> Exécuter
+    </button>
+    <button class="btn btn-danger" onclick="stopExecution()">
+        <i class="fa-solid fa-stop"></i> Arrêter
+    </button>
+    <button class="btn" onclick="saveProjectToDB()">
+        <i class="fa-solid fa-floppy-disk"></i> Sauvegarder
+    </button>
+    <button class="btn" onclick="openPipModal()">
+        <i class="fa-solid fa-box"></i> Installer Package
+    </button>
 
-    <div style="margin-left: auto; display: flex; gap: 5px;">
-        <input type="text" id="package-name" placeholder="ex: requests">
-        <button onclick="installPackage()">📦 Installer Lib</button>
+    <div style="margin-left: auto; display: flex; gap: 8px;">
+        <button class="btn" onclick="toggleFullscreen('editor')" title="Plein écran Éditeur">
+            <i class="fa-solid fa-expand"></i> Éditeur
+        </button>
+        <button class="btn" onclick="toggleFullscreen('console')" title="Plein écran Console">
+            <i class="fa-solid fa-terminal"></i> Console
+        </button>
     </div>
 </header>
 
-<div class="main-container">
-    <div class="sidebar">
-        <h3>Fichiers (BDB)</h3>
-        <ul>
-            {% for script in scripts %}
-                <li onclick="loadScript({{ script.id }})">📄 {{ script.filename }}</li>
+<div class="ide-container">
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <span>Explorateur de fichiers</span>
+            <i class="fa-solid fa-file-circle-plus" style="cursor:pointer;" onclick="promptNewFile()" title="Nouveau Fichier"></i>
+        </div>
+        <div class="file-tree" id="file-tree"></div>
+
+        <div class="sidebar-header" style="border-top: 1px solid var(--border-color);">
+            <span>Projets Sauvegardés</span>
+        </div>
+        <div class="file-tree" id="project-list" style="max-height: 150px;">
+            {% for proj in projects %}
+                <div class="file-item" onclick="loadProjectFromDB({{ proj.id }})">
+                    <span><i class="fa-solid fa-folder"></i> {{ proj.name }}</span>
+                </div>
             {% endfor %}
-        </ul>
+        </div>
     </div>
-    
-    <div class="editor-section">
-        <div id="editor">print("Hello, World!")</div>
-        <div class="console-section">
-            <div class="console-header">CONSOLE DE SORTIE</div>
-            <div id="console-output">Appuie sur Exécuter pour voir le résultat...</div>
+
+    <div class="workspace" id="workspace">
+        <div class="tabs-bar" id="tabs-bar"></div>
+
+        <div class="editor-container">
+            <div id="monaco-editor"></div>
+        </div>
+
+        <div class="console-panel" id="console-panel">
+            <div class="console-header">
+                <span><i class="fa-solid fa-terminal"></i> CONSOLE INTERACTIVE</span>
+                <button class="btn" style="padding: 2px 8px; font-size: 11px;" onclick="clearConsole()">
+                    <i class="fa-solid fa-trash-can"></i> Effacer
+                </button>
+            </div>
+            
+            <div class="console-output" id="console-output">Appuie sur [Exécuter] pour démarrer...</div>
+            
+            <div class="console-input-bar">
+                <span class="console-prompt">❯</span>
+                <input type="text" id="console-input" class="console-input" placeholder="Écris une valeur pour input() puis valide..." onkeypress="handleInputKeyPress(event)">
+                <button class="btn btn-success" style="padding: 4px 10px;" onclick="sendInput()">Envoyer</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<footer>
+    <div class="status-item" id="status-text">
+        <i class="fa-solid fa-circle" style="color: var(--accent-green); font-size: 8px;"></i> Prêt
+    </div>
+    <div class="status-item" id="syntax-status">
+        <i class="fa-solid fa-check-double"></i> Syntaxe OK
+    </div>
+    <div class="status-item">
+        Python 3.10+ | Monaco Engine
+    </div>
+</footer>
+
+<div class="modal" id="pip-modal">
+    <div class="modal-content">
+        <h3>Installer une bibliothèque Pip</h3>
+        <input type="text" id="pip-package-input" placeholder="ex: requests, numpy, pandas">
+        <div style="display: flex; gap: 10px; justify-content: flex-end;">
+            <button class="btn" onclick="closePipModal()">Annuler</button>
+            <button class="btn btn-success" onclick="installPipPackage()">Installer</button>
         </div>
     </div>
 </div>
 
 <script>
-    const editor = ace.edit("editor");
-    editor.setTheme("ace/theme/monokai");
-    editor.session.setMode("ace/mode/python");
+    let files = {
+        'main.py': '# Fichier principal\nimport utils\n\nname = input("Quel est ton nom ? ")\nprint(f"Bonjour {name} !")\nprint("Calcul:", utils.add(10, 20))\n',
+        'utils.py': '# Module auxiliaire\ndef add(a, b):\n    return a + b\n'
+    };
+    let activeFile = 'main.py';
+    let monacoEditor = null;
+    let fileModels = {};
+    let errorDecorations = [];
+    let socket = null;
+    let isRunning = false;
+    let currentTraceback = "";
 
-    async function runCode() {
-        const output = document.getElementById('console-output');
-        output.innerText = "Exécution en cours...";
-        const res = await fetch('/run', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ code: editor.getValue() })
+    require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs' }});
+    require(['vs/editor/editor.main'], function() {
+        monacoEditor = monaco.editor.create(document.getElementById('monaco-editor'), {
+            theme: 'vs-dark',
+            language: 'python',
+            automaticLayout: true,
+            fontSize: 14,
+            fontFamily: "Consolas, monospace",
+            minimap: { enabled: true },
+            bracketPairColorization: { enabled: true },
+            quickSuggestions: true,
+            suggestOnTriggerCharacters: true
         });
-        const data = await res.json();
-        output.innerText = data.stdout || data.stderr || "Programme exécuté sans sortie.";
+
+        for (let fname in files) {
+            fileModels[fname] = monaco.editor.createModel(files[fname], 'python');
+        }
+        monacoEditor.setModel(fileModels[activeFile]);
+
+        monacoEditor.onDidChangeModelContent(() => {
+            files[activeFile] = monacoEditor.getValue();
+            debounceSyntaxCheck();
+        });
+
+        renderFileTree();
+        renderTabs();
+        checkSyntax();
+    });
+
+    socket = io();
+
+    socket.on('output', function(msg) {
+        const consoleOut = document.getElementById('console-output');
+        consoleOut.innerText += msg.data;
+        currentTraceback += msg.data;
+        consoleOut.scrollTop = consoleOut.scrollHeight;
+
+        detectExecutionError(currentTraceback);
+    });
+
+    socket.on('execution_finished', function(data) {
+        isRunning = false;
+        document.getElementById('status-text').innerHTML = `<i class="fa-solid fa-circle" style="color: var(--accent-green); font-size: 8px;"></i> Terminé (Code: ${data.code})`;
+    });
+
+    function runProject() {
+        if (!monacoEditor) return;
+        files[activeFile] = monacoEditor.getValue();
+        
+        clearConsole();
+        currentTraceback = "";
+        clearErrorHighlight();
+
+        document.getElementById('status-text').innerHTML = `<i class="fa-solid fa-spinner fa-spin" style="color: var(--accent-yellow);"></i> Exécution...`;
+        isRunning = true;
+
+        socket.emit('start_execution', {
+            files: files,
+            entrypoint: 'main.py'
+        });
     }
 
-    async function installPackage() {
-        const pkg = document.getElementById('package-name').value;
-        const output = document.getElementById('console-output');
+    function stopExecution() {
+        socket.emit('stop_execution');
+        isRunning = false;
+        document.getElementById('status-text').innerHTML = `<i class="fa-solid fa-circle" style="color: var(--accent-red); font-size: 8px;"></i> Interrompu`;
+    }
+
+    function sendInput() {
+        const inputEl = document.getElementById('console-input');
+        const text = inputEl.value;
+        if (!text && !isRunning) return;
+        
+        const consoleOut = document.getElementById('console-output');
+        consoleOut.innerText += text + "\n";
+        consoleOut.scrollTop = consoleOut.scrollHeight;
+
+        socket.emit('input_data', { input: text });
+        inputEl.value = '';
+    }
+
+    function handleInputKeyPress(e) {
+        if (e.key === 'Enter') sendInput();
+    }
+
+    function clearConsole() {
+        document.getElementById('console-output').innerHTML = '';
+        currentTraceback = '';
+        clearErrorHighlight();
+    }
+
+    function renderFileTree() {
+        const tree = document.getElementById('file-tree');
+        tree.innerHTML = '';
+        for (let fname in files) {
+            const item = document.createElement('div');
+            item.className = `file-item ${fname === activeFile ? 'active' : ''}`;
+            item.innerHTML = `
+                <span onclick="switchFile('${fname}')"><i class="fa-regular fa-file-code"></i> ${fname}</span>
+                <div class="file-actions">
+                    <i class="fa-solid fa-pen-to-square" onclick="renameFile('${fname}')" title="Renommer"></i>
+                    ${Object.keys(files).length > 1 ? `<i class="fa-solid fa-trash" onclick="deleteFile('${fname}')" title="Supprimer"></i>` : ''}
+                </div>
+            `;
+            tree.appendChild(item);
+        }
+    }
+
+    function renderTabs() {
+        const tabsBar = document.getElementById('tabs-bar');
+        tabsBar.innerHTML = '';
+        for (let fname in files) {
+            const tab = document.createElement('div');
+            tab.className = `tab ${fname === activeFile ? 'active' : ''}`;
+            tab.innerHTML = `
+                <span onclick="switchFile('${fname}')"><i class="fa-brands fa-python"></i> ${fname}</span>
+                ${Object.keys(files).length > 1 ? `<i class="fa-solid fa-xmark tab-close" onclick="deleteFile('${fname}')"></i>` : ''}
+            `;
+            tabsBar.appendChild(tab);
+        }
+    }
+
+    function switchFile(fname) {
+        if (!files[fname]) return;
+        files[activeFile] = monacoEditor.getValue();
+        activeFile = fname;
+        
+        if (!fileModels[fname]) {
+            fileModels[fname] = monaco.editor.createModel(files[fname], 'python');
+        }
+        monacoEditor.setModel(fileModels[fname]);
+        renderFileTree();
+        renderTabs();
+        checkSyntax();
+    }
+
+    function promptNewFile() {
+        const fname = prompt("Nom du fichier :", "script.py");
+        if (fname && fname.trim()) {
+            const name = fname.trim();
+            if (files[name]) return alert("Ce fichier existe déjà !");
+            files[name] = "# Nouveau fichier\n";
+            fileModels[name] = monaco.editor.createModel(files[name], 'python');
+            switchFile(name);
+        }
+    }
+
+    function renameFile(oldName) {
+        const newName = prompt("Nouveau nom :", oldName);
+        if (newName && newName.trim() && newName !== oldName) {
+            const name = newName.trim();
+            files[name] = files[oldName];
+            delete files[oldName];
+            fileModels[name] = fileModels[oldName];
+            delete fileModels[oldName];
+            if (activeFile === oldName) activeFile = name;
+            renderFileTree();
+            renderTabs();
+        }
+    }
+
+    function deleteFile(fname) {
+        if (Object.keys(files).length <= 1) return;
+        if (confirm(`Supprimer ${fname} ?`)) {
+            delete files[fname];
+            if (fileModels[fname]) {
+                fileModels[fname].dispose();
+                delete fileModels[fname];
+            }
+            activeFile = Object.keys(files)[0];
+            monacoEditor.setModel(fileModels[activeFile]);
+            renderFileTree();
+            renderTabs();
+        }
+    }
+
+    let syntaxTimer = null;
+    function debounceSyntaxCheck() {
+        clearTimeout(syntaxTimer);
+        syntaxTimer = setTimeout(checkSyntax, 400);
+    }
+
+    async function checkSyntax() {
+        const code = monacoEditor.getValue();
+        const res = await fetch('/syntax_check', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ code: code, filename: activeFile })
+        });
+        const data = await res.json();
+        
+        const syntaxStatus = document.getElementById('syntax-status');
+        if (data.valid) {
+            monaco.editor.setModelMarkers(fileModels[activeFile], 'owner', []);
+            syntaxStatus.innerHTML = `<i class="fa-solid fa-check-double" style="color: var(--accent-green);"></i> Syntaxe OK`;
+        } else {
+            monaco.editor.setModelMarkers(fileModels[activeFile], 'owner', [{
+                startLineNumber: data.line,
+                startColumn: data.column,
+                endLineNumber: data.line,
+                endColumn: data.column + 10,
+                message: data.msg,
+                severity: monaco.MarkerSeverity.Error
+            }]);
+            syntaxStatus.innerHTML = `<i class="fa-solid fa-triangle-exclamation" style="color: var(--accent-red);"></i> Erreur Ligne ${data.line}: ${data.msg}`;
+        }
+    }
+
+    function detectExecutionError(text) {
+        const lineMatch = text.match(/File ".*?", line (\d+)/i);
+        if (lineMatch && lineMatch[1]) {
+            const lineNum = parseInt(lineMatch[1]);
+            highlightErrorLine(lineNum);
+        }
+        
+        if ((text.includes("Traceback") || text.includes("Error:")) && !document.getElementById('error-card-element')) {
+            renderErrorCard();
+        }
+    }
+
+    function highlightErrorLine(lineNum) {
+        errorDecorations = monacoEditor.deltaDecorations(errorDecorations, [
+            {
+                range: new monaco.Range(lineNum, 1, lineNum, 1),
+                options: {
+                    isWholeLine: true,
+                    className: 'error-line-highlight'
+                }
+            }
+        ]);
+        monacoEditor.revealLineInCenter(lineNum);
+    }
+
+    function clearErrorHighlight() {
+        errorDecorations = monacoEditor.deltaDecorations(errorDecorations, []);
+        const errCard = document.getElementById('error-card-element');
+        if (errCard) errCard.remove();
+    }
+
+    function renderErrorCard() {
+        const consoleOut = document.getElementById('console-output');
+        const card = document.createElement('div');
+        card.id = 'error-card-element';
+        card.className = 'error-card';
+        card.innerHTML = `
+            <div class="error-card-header">
+                <span>🚨 Une erreur est survenue pendant l'exécution</span>
+                <button class="error-copy-btn" onclick="copyErrorToClipboard()">📋 Copier l'erreur</button>
+            </div>
+            <div>Examinez la ligne surlignée en rouge dans l'éditeur ci-dessus.</div>
+        `;
+        consoleOut.appendChild(card);
+        consoleOut.scrollTop = consoleOut.scrollHeight;
+    }
+
+    function copyErrorToClipboard() {
+        navigator.clipboard.writeText(currentTraceback).then(() => {
+            alert("Erreur copiée dans le presse-papier !");
+        });
+    }
+
+    function toggleFullscreen(type) {
+        const workspace = document.getElementById('workspace');
+        if (type === 'editor') {
+            workspace.classList.toggle('fullscreen-editor');
+            workspace.classList.remove('fullscreen-console');
+        } else if (type === 'console') {
+            workspace.classList.toggle('fullscreen-console');
+            workspace.classList.remove('fullscreen-editor');
+        }
+        if (monacoEditor) monacoEditor.layout();
+    }
+
+    function openPipModal() { document.getElementById('pip-modal').style.display = 'flex'; }
+    function closePipModal() { document.getElementById('pip-modal').style.display = 'none'; }
+    
+    async function installPipPackage() {
+        const pkg = document.getElementById('pip-package-input').value.trim();
         if (!pkg) return;
-        output.innerText = `Installation de ${pkg}...`;
-        const res = await fetch('/install', {
+        closePipModal();
+        
+        clearConsole();
+        const consoleOut = document.getElementById('console-output');
+        consoleOut.innerText = `Installation de ${pkg} via pip...\n`;
+        
+        const res = await fetch('/install_package', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({ package: pkg })
         });
         const data = await res.json();
-        output.innerText = data.output;
+        consoleOut.innerText += data.output;
     }
 
-    async function saveToDB() {
-        const filename = document.getElementById('filename').value;
-        const code = editor.getValue();
-        await fetch('/save', {
+    async function saveProjectToDB() {
+        const name = document.getElementById('project-name').value;
+        files[activeFile] = monacoEditor.getValue();
+        
+        const res = await fetch('/save_project', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ filename, code })
+            body: JSON.stringify({ name: name, files: files })
         });
-        window.location.reload();
-    }
-
-    async function loadScript(id) {
-        const res = await fetch('/load/' + id);
         const data = await res.json();
-        document.getElementById('filename').value = data.filename;
-        editor.setValue(data.content, -1);
+        if (data.status === 'success') {
+            alert("Projet sauvegardé !");
+            window.location.reload();
+        }
     }
 
-    function importFile(e) {
-        const file = e.target.files[0];
-        if (!file) return;
-        document.getElementById('filename').value = file.name;
-        const reader = new FileReader();
-        reader.onload = (evt) => editor.setValue(evt.target.result, -1);
-        reader.readAsText(file);
-    }
-
-    function exportFile() {
-        document.getElementById('export-filename').value = document.getElementById('filename').value;
-        document.getElementById('export-code').value = editor.getValue();
-        document.getElementById('export-form').submit();
+    async function loadProjectFromDB(id) {
+        const res = await fetch(`/load_project/${id}`);
+        const data = await res.json();
+        document.getElementById('project-name').value = data.name;
+        files = data.files;
+        activeFile = Object.keys(files)[0];
+        
+        for (let f in fileModels) fileModels[f].dispose();
+        fileModels = {};
+        for (let f in files) {
+            fileModels[f] = monaco.editor.createModel(files[f], 'python');
+        }
+        monacoEditor.setModel(fileModels[activeFile]);
+        renderFileTree();
+        renderTabs();
+        checkSyntax();
     }
 </script>
 
