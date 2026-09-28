@@ -4,25 +4,22 @@ import subprocess
 import tempfile
 import shutil
 import ast
-import pty
-import select
-import threading
 import json
 from flask import Flask, render_template, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_socketio import SocketIO, emit
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'dev-secret-key-render-v2'
+app.config['SECRET_KEY'] = 'dev-secret-key-render-v3'
 
-# Database SQLite local / PostgreSQL sur Render
+# Base de données
 db_url = os.environ.get('DATABASE_URL', 'sqlite:///editor.db')
 if db_url.startswith("postgres://"):
     db_url = db_url.replace("postgres://", "postgresql://", 1)
 app.config['SQLALCHEMY_DATABASE_URI'] = db_url
 
 db = SQLAlchemy(app)
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode=None)
 
 class Project(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -98,7 +95,7 @@ def load_project(project_id):
     project = Project.query.get_or_404(project_id)
     return jsonify({'name': project.name, 'files': json.loads(project.files_json)})
 
-# WebSockets pour exécution interactive et streaming
+# WebSockets pour l'exécution fluide
 @socketio.on('start_execution')
 def handle_start_execution(data):
     sid = request.sid
@@ -121,87 +118,36 @@ def handle_start_execution(data):
     exec_file = os.path.join(temp_dir, entrypoint)
     
     try:
-        if os.name != 'nt':  # Linux / Render / macOS
-            master, slave = pty.openpty()
-            proc = subprocess.Popen(
-                [sys.executable, '-u', exec_file],
-                cwd=temp_dir,
-                stdin=slave,
-                stdout=slave,
-                stderr=slave,
-                close_fds=True
-            )
-            os.close(slave)
-            running_processes[sid] = {'proc': proc, 'master': master, 'temp_dir': temp_dir, 'is_pty': True}
+        env = os.environ.copy()
+        env["PYTHONUNBUFFERED"] = "1"
+        
+        proc = subprocess.Popen(
+            [sys.executable, '-u', exec_file],
+            cwd=temp_dir,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            bufsize=0,
+            env=env
+        )
+        running_processes[sid] = {'proc': proc, 'temp_dir': temp_dir}
+
+        def read_output():
+            while True:
+                chunk = proc.stdout.read(1)
+                if chunk == b'' and proc.poll() is not None:
+                    break
+                if chunk:
+                    text = chunk.decode('utf-8', errors='replace')
+                    socketio.emit('output', {'data': text, 'type': 'stdout'}, room=sid)
             
-            def read_output():
-                while True:
-                    try:
-                        r, _, _ = select.select([master], [], [], 0.1)
-                        if r:
-                            data_chunk = os.read(master, 1024).decode('utf-8', errors='replace')
-                            if not data_chunk:
-                                break
-                            socketio.emit('output', {'data': data_chunk, 'type': 'stdout'}, room=sid)
-                    except Exception:
-                        break
-                    if proc.poll() is not None:
-                        try:
-                            while True:
-                                r, _, _ = select.select([master], [], [], 0.05)
-                                if not r:
-                                    break
-                                data_chunk = os.read(master, 1024).decode('utf-8', errors='replace')
-                                if not data_chunk:
-                                    break
-                                socketio.emit('output', {'data': data_chunk, 'type': 'stdout'}, room=sid)
-                        except Exception:
-                            pass
-                        break
-                
-                returncode = proc.wait()
-                try:
-                    os.close(master)
-                except Exception:
-                    pass
-                shutil.rmtree(temp_dir, ignore_errors=True)
-                socketio.emit('execution_finished', {'code': returncode}, room=sid)
-                if sid in running_processes:
-                    del running_processes[sid]
+            returncode = proc.wait()
+            shutil.rmtree(temp_dir, ignore_errors=True)
+            socketio.emit('execution_finished', {'code': returncode}, room=sid)
+            if sid in running_processes:
+                del running_processes[sid]
 
-            thread = threading.Thread(target=read_output)
-            thread.daemon = True
-            thread.start()
-
-        else:  # Windows local fallback
-            proc = subprocess.Popen(
-                [sys.executable, '-u', exec_file],
-                cwd=temp_dir,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                bufsize=0
-            )
-            running_processes[sid] = {'proc': proc, 'temp_dir': temp_dir, 'is_pty': False}
-
-            def read_output_win():
-                while True:
-                    out = proc.stdout.read(1)
-                    if out == b'' and proc.poll() is not None:
-                        break
-                    if out:
-                        char = out.decode('utf-8', errors='replace')
-                        socketio.emit('output', {'data': char, 'type': 'stdout'}, room=sid)
-                
-                returncode = proc.wait()
-                shutil.rmtree(temp_dir, ignore_errors=True)
-                socketio.emit('execution_finished', {'code': returncode}, room=sid)
-                if sid in running_processes:
-                    del running_processes[sid]
-
-            thread = threading.Thread(target=read_output_win)
-            thread.daemon = True
-            thread.start()
+        socketio.start_background_task(target=read_output)
 
     except Exception as e:
         shutil.rmtree(temp_dir, ignore_errors=True)
@@ -217,11 +163,8 @@ def handle_input_data(data):
         proc = info['proc']
         if proc.poll() is None:
             try:
-                if info.get('is_pty'):
-                    os.write(info['master'], input_text.encode('utf-8'))
-                else:
-                    proc.stdin.write(input_text.encode('utf-8'))
-                    proc.stdin.flush()
+                proc.stdin.write(input_text.encode('utf-8'))
+                proc.stdin.flush()
             except Exception as e:
                 emit('output', {'data': f"\n[Erreur d'entrée: {str(e)}]\n", 'type': 'stderr'})
 
