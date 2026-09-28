@@ -9,25 +9,27 @@ import uuid
 import time
 import re
 import threading
-import io
+import codecs
 from flask import Flask, render_template, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'dev-secret-key-studio-v7'
+app.config['SECRET_KEY'] = 'dev-secret-key-studio-v8'
 
-# Base de données SQLite local / PostgreSQL sur Render
+# Support SQLite local & PostgreSQL sur Render
 db_url = os.environ.get('DATABASE_URL', 'sqlite:///editor.db')
 if db_url.startswith("postgres://"):
     db_url = db_url.replace("postgres://", "postgresql://", 1)
 app.config['SQLALCHEMY_DATABASE_URI'] = db_url
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
 
 class Project(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), nullable=False)
+    name = db.Column(db.String(100), nullable=False, unique=True)
     files_json = db.Column(db.Text, nullable=False)
+    entrypoint = db.Column(db.String(100), default='main.py')
 
 with app.app_context():
     db.create_all()
@@ -37,8 +39,8 @@ running_processes = {}
 def cleanup_old_processes():
     now = time.time()
     to_delete = []
-    for pid, info in running_processes.items():
-        if now - info.get('created_at', now) > 300: # 5 minutes max
+    for pid, info in list(running_processes.items()):
+        if now - info.get('created_at', now) > 300: # Timeout 5 minutes
             try:
                 info['proc'].kill()
             except Exception:
@@ -46,13 +48,75 @@ def cleanup_old_processes():
             shutil.rmtree(info.get('temp_dir', ''), ignore_errors=True)
             to_delete.append(pid)
     for pid in to_delete:
-        del running_processes[pid]
+        running_processes.pop(pid, None)
 
 @app.route('/')
 def index():
     cleanup_old_processes()
-    projects = Project.query.all()
+    projects = Project.query.order_by(Project.id.desc()).all()
     return render_template('index.html', projects=projects)
+
+@app.route('/api/projects', methods=['GET'])
+def get_projects():
+    projects = Project.query.order_by(Project.id.desc()).all()
+    return jsonify([{'id': p.id, 'name': p.name, 'entrypoint': p.entrypoint} for p in projects])
+
+@app.route('/api/save_project', methods=['POST'])
+def save_project():
+    data = request.json or {}
+    project_id = data.get('id')
+    name = (data.get('name') or 'Mon Projet').strip()
+    files = data.get('files', {})
+    entrypoint = data.get('entrypoint', 'main.py')
+
+    if not files:
+        return jsonify({'error': 'Aucun fichier à sauvegarder'}), 400
+
+    if entrypoint not in files:
+        entrypoint = list(files.keys())[0]
+
+    # Mise à jour par ID si existant
+    if project_id:
+        project = Project.query.get(project_id)
+        if project:
+            project.name = name
+            project.files_json = json.dumps(files)
+            project.entrypoint = entrypoint
+            db.session.commit()
+            return jsonify({'status': 'success', 'id': project.id, 'name': project.name})
+
+    # Mise à jour par nom
+    existing = Project.query.filter_by(name=name).first()
+    if existing:
+        existing.files_json = json.dumps(files)
+        existing.entrypoint = entrypoint
+        db.session.commit()
+        return jsonify({'status': 'success', 'id': existing.id, 'name': existing.name})
+
+    # Création nouveau
+    project = Project(name=name, files_json=json.dumps(files), entrypoint=entrypoint)
+    db.session.add(project)
+    db.session.commit()
+    return jsonify({'status': 'success', 'id': project.id, 'name': project.name})
+
+@app.route('/api/load_project/<int:project_id>', methods=['GET'])
+def load_project(project_id):
+    project = Project.query.get_or_404(project_id)
+    return jsonify({
+        'id': project.id,
+        'name': project.name,
+        'files': json.loads(project.files_json),
+        'entrypoint': project.entrypoint
+    })
+
+@app.route('/api/delete_project/<int:project_id>', methods=['DELETE'])
+def delete_project(project_id):
+    project = Project.query.get(project_id)
+    if project:
+        db.session.delete(project)
+        db.session.commit()
+        return jsonify({'status': 'success'})
+    return jsonify({'error': 'Projet introuvable'}), 404
 
 @app.route('/api/start', methods=['POST'])
 def start_execution():
@@ -61,8 +125,11 @@ def start_execution():
     files = data.get('files', {})
     entrypoint = data.get('entrypoint', 'main.py')
 
-    if not files or entrypoint not in files:
-        return jsonify({'error': f"Le fichier '{entrypoint}' est introuvable."}), 400
+    if not files:
+        return jsonify({'error': "Aucun fichier fourni."}), 400
+
+    if entrypoint not in files:
+        entrypoint = list(files.keys())[0]
 
     process_id = str(uuid.uuid4())
     temp_dir = tempfile.mkdtemp(prefix="py_exec_")
@@ -74,8 +141,6 @@ def start_execution():
             f.write(content)
 
     exec_path = os.path.join(temp_dir, entrypoint)
-    
-    # Configuration stricte de l'encodage UTF-8
     env = os.environ.copy()
     env["PYTHONUNBUFFERED"] = "1"
     env["PYTHONIOENCODING"] = "utf-8"
@@ -103,24 +168,30 @@ def start_execution():
         running_processes[process_id] = proc_info
 
         def read_output():
-            # Utilisation de TextIOWrapper pour assembler les multi-octets UTF-8 sans altérer les accents
-            stdout_reader = io.TextIOWrapper(proc.stdout, encoding='utf-8', errors='replace', newline='')
+            decoder = codecs.getincrementaldecoder('utf-8')(errors='replace')
             while True:
-                char = stdout_reader.read(1)
-                if char == '' and proc.poll() is not None:
+                try:
+                    chunk = proc.stdout.read(64)
+                except Exception:
                     break
-                if char:
-                    proc_info['output'].append(char)
-            
+                if not chunk and proc.poll() is not None:
+                    remainder = decoder.decode(b'', final=True)
+                    if remainder:
+                        proc_info['output'].append(remainder)
+                    break
+                if chunk:
+                    text = decoder.decode(chunk)
+                    if text:
+                        proc_info['output'].append(text)
+
             proc_info['returncode'] = proc.wait()
             proc_info['status'] = 'finished'
             shutil.rmtree(temp_dir, ignore_errors=True)
 
-        thread = threading.Thread(target=read_output)
-        thread.daemon = True
+        thread = threading.Thread(target=read_output, daemon=True)
         thread.start()
 
-        return jsonify({'process_id': process_id})
+        return jsonify({'process_id': process_id, 'entrypoint': entrypoint})
 
     except Exception as e:
         shutil.rmtree(temp_dir, ignore_errors=True)
@@ -189,7 +260,7 @@ def syntax_check():
     data = request.json or {}
     code = data.get('code', '')
     filename = data.get('filename', 'main.py')
-    
+
     try:
         ast.parse(code, filename=filename)
         return jsonify({'valid': True})
@@ -219,27 +290,6 @@ def install_package():
         return jsonify({'output': result.stdout + result.stderr})
     except Exception as e:
         return jsonify({'output': str(e)})
-
-@app.route('/save_project', methods=['POST'])
-def save_project():
-    data = request.json or {}
-    name = data.get('name', 'Mon Projet')
-    files = data.get('files', {})
-    
-    project = Project.query.filter_by(name=name).first()
-    if project:
-        project.files_json = json.dumps(files)
-    else:
-        project = Project(name=name, files_json=json.dumps(files))
-        db.session.add(project)
-    
-    db.session.commit()
-    return jsonify({'status': 'success', 'id': project.id})
-
-@app.route('/load_project/<int:project_id>')
-def load_project(project_id):
-    project = Project.query.get_or_404(project_id)
-    return jsonify({'name': project.name, 'files': json.loads(project.files_json)})
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
