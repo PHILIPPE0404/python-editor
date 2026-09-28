@@ -476,16 +476,20 @@
         });
     }
 
-    function toggleFullscreen(type) {
+    function setViewMode(mode) {
         const workspace = document.getElementById('workspace');
-        if (type === 'editor') {
-            workspace.classList.toggle('fullscreen-editor');
-            workspace.classList.remove('fullscreen-console');
-        } else if (type === 'console') {
-            workspace.classList.toggle('fullscreen-console');
-            workspace.classList.remove('fullscreen-editor');
+        workspace.classList.remove('fullscreen-editor', 'fullscreen-console');
+    
+        if (mode === 'editor') {
+            workspace.classList.add('fullscreen-editor');
+        } else if (mode === 'console') {
+            workspace.classList.add('fullscreen-console');
         }
-        if (monacoEditor) monacoEditor.layout();
+    
+    // Recalcule la taille de l'éditeur Monaco immédiatement
+        setTimeout(() => {
+            if (monacoEditor) monacoEditor.layout();
+        }, 50);
     }
 
     function openPipModal() { document.getElementById('pip-modal').style.display = 'flex'; }
