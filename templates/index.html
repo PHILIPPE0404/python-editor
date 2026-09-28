@@ -33,14 +33,13 @@
         .btn { background: #313244; color: var(--text-main); border: 1px solid #45475a; padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: all 0.2s; }
         .btn:hover { background: #45475a; color: #fff; }
         .btn-success { background: #234731; color: var(--accent-green); border-color: #2e5c3e; }
-        .btn-success:hover { background: #2e5c3e; }
+        .btn-danger { background: #52232d; color: var(--accent-red); border-color: #6b2d3b; }
 
         .project-title { background: transparent; border: 1px solid transparent; color: var(--text-main); font-weight: 600; font-size: 14px; padding: 4px 8px; border-radius: 4px; width: 180px; }
         .project-title:focus { border-color: var(--accent-blue); outline: none; background: #1e1e2e; }
 
         .ide-container { flex: 1; display: flex; height: calc(100vh - 75px); position: relative; }
 
-        /* Sidebar à gauche avec fichiers */
         .sidebar { width: 240px; background: var(--bg-sidebar); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; }
         .sidebar-header { padding: 12px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-dim); border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; }
         .file-tree { flex: 1; overflow-y: auto; padding: 8px 0; }
@@ -61,23 +60,27 @@
         .editor-container { flex: 6; position: relative; width: 100%; height: 100%; }
         #monaco-editor { width: 100%; height: 100%; }
 
-        .console-panel { flex: 4; background: var(--bg-console); border-top: 1px solid var(--border-color); display: flex; flex-direction: column; }
+        .console-panel { flex: 4; background: var(--bg-console); border-top: 1px solid var(--border-color); display: flex; flex-direction: column; position: relative; }
         .console-header { height: 35px; background: #181825; padding: 0 12px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border-color); font-size: 12px; font-weight: 600; color: var(--text-dim); }
         
         .console-output { flex: 1; padding: 12px; font-family: 'Consolas', 'Courier New', monospace; font-size: 13px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; color: var(--accent-green); }
         
-        .console-input-bar { display: flex; border-top: 1px solid var(--border-color); background: #181825; padding: 6px 12px; gap: 8px; align-items: center; }
-        .console-prompt { color: var(--accent-yellow); font-family: monospace; font-weight: bold; }
-        .console-input { flex: 1; background: #11111b; border: 1px solid var(--border-color); color: #fff; padding: 6px 10px; border-radius: 4px; font-family: monospace; font-size: 13px; outline: none; }
+        .input-waiting-banner { display: none; background: #3e3312; color: var(--accent-yellow); border-top: 1px solid var(--accent-yellow); padding: 6px 12px; font-size: 12px; font-weight: bold; align-items: center; gap: 8px; animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0% { opacity: 0.8; } 50% { opacity: 1; } 100% { opacity: 0.8; } }
 
-        /* Modes de Vue */
+        .console-input-bar { display: flex; border-top: 1px solid var(--border-color); background: #181825; padding: 8px 12px; gap: 8px; align-items: center; transition: all 0.3s ease; }
+        .console-input-bar.active-waiting { background: #2d2611; border-top-color: var(--accent-yellow); }
+        .console-prompt { color: var(--accent-yellow); font-family: monospace; font-weight: bold; }
+        .console-input { flex: 1; background: #11111b; border: 1px solid var(--border-color); color: #fff; padding: 8px 12px; border-radius: 4px; font-family: monospace; font-size: 13px; outline: none; }
+        .console-input:focus { border-color: var(--accent-blue); }
+        .console-input-bar.active-waiting .console-input { border-color: var(--accent-yellow); box-shadow: 0 0 8px rgba(249, 226, 175, 0.3); }
+
         .workspace.mode-editor .console-panel { display: none !important; }
         .workspace.mode-editor .editor-container { flex: 1 !important; }
         
         .workspace.mode-console .editor-container, .workspace.mode-console .tabs-bar { display: none !important; }
         .workspace.mode-console .console-panel { flex: 1 !important; }
 
-        /* Erreurs Visuelles */
         .error-card { background: #2a1b24; border: 1px solid #f38ba8; border-radius: 6px; padding: 12px; margin: 10px 0; color: #f38ba8; font-family: sans-serif; font-size: 13px; }
         .error-card-header { display: flex; justify-content: space-between; align-items: center; font-weight: 700; margin-bottom: 6px; }
         .error-copy-btn { background: #f38ba8; color: #11111b; border: none; padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: bold; cursor: pointer; }
@@ -85,7 +88,7 @@
 
         footer { height: 25px; background: #11111b; border-top: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; padding: 0 15px; font-size: 11px; color: var(--text-dim); }
 
-        .error-line-highlight { background: rgba(243, 139, 168, 0.3) !important; width: 100% !important; }
+        .error-line-highlight { background: rgba(243, 139, 168, 0.3) !important; width: 100% !important; border-left: 3px solid var(--accent-red); }
 
         .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 1000; justify-content: center; align-items: center; }
         .modal-content { background: var(--bg-sidebar); border: 1px solid var(--border-color); border-radius: 8px; padding: 20px; width: 400px; color: var(--text-main); }
@@ -103,6 +106,9 @@
     
     <button class="btn btn-success" onclick="runProject()">
         <i class="fa-solid fa-play"></i> Exécuter
+    </button>
+    <button class="btn btn-danger" onclick="stopExecution()">
+        <i class="fa-solid fa-stop"></i> Arrêter
     </button>
     <button class="btn" onclick="saveProjectToDB()">
         <i class="fa-solid fa-floppy-disk"></i> Sauvegarder
@@ -125,7 +131,6 @@
 </header>
 
 <div class="ide-container">
-    <!-- Volet Latéral des Fichiers -->
     <div class="sidebar">
         <div class="sidebar-header">
             <span>Fichiers du Projet</span>
@@ -145,7 +150,6 @@
         </div>
     </div>
 
-    <!-- Zone de Travail -->
     <div class="workspace" id="workspace">
         <div class="tabs-bar" id="tabs-bar"></div>
 
@@ -155,7 +159,7 @@
 
         <div class="console-panel" id="console-panel">
             <div class="console-header">
-                <span><i class="fa-solid fa-terminal"></i> CONSOLE</span>
+                <span><i class="fa-solid fa-terminal"></i> CONSOLE INTERACTIVE</span>
                 <button class="btn" style="padding: 2px 8px; font-size: 11px;" onclick="clearConsole()">
                     <i class="fa-solid fa-trash-can"></i> Effacer
                 </button>
@@ -163,10 +167,14 @@
             
             <div class="console-output" id="console-output">Cliquez sur [Exécuter] pour lancer le script...</div>
             
-            <div class="console-input-bar">
+            <div class="input-waiting-banner" id="input-waiting-banner">
+                <i class="fa-solid fa-keyboard"></i> Python est en pause : il attend votre saisie ci-dessous ! Appuyez sur Entrée pour envoyer.
+            </div>
+
+            <div class="console-input-bar" id="console-input-bar">
                 <span class="console-prompt">❯</span>
-                <input type="text" id="console-input" class="console-input" placeholder="Saisir des réponses pour input() puis appuyer sur Entrée..." onkeypress="handleInputKeyPress(event)">
-                <button class="btn btn-success" style="padding: 4px 10px;" onclick="addInputToBuffer()">Ajouter Entrée</button>
+                <input type="text" id="console-input" class="console-input" placeholder="Saisir votre réponse ici puis appuyer sur Entrée..." onkeypress="handleInputKeyPress(event)">
+                <button class="btn btn-success" style="padding: 6px 14px;" onclick="sendConsoleInput()">Envoyer</button>
             </div>
         </div>
     </div>
@@ -195,15 +203,16 @@
 
 <script>
     let files = {
-        'main.py': '# Fichier principal\nimport utils\n\nname = input("Quel est votre prénom ? ")\nprint(f"Bonjour {name} !")\nprint("Somme:", utils.add(15, 25))\n',
-        'utils.py': '# Fichier auxiliaire\ndef add(a, b):\n    return a + b\n'
+        'main.py': '# Exemple d\'interaction input()\nimport utils\n\nname = input("Quel est votre prénom ? ")\nprint(f"Bonjour {name} !")\n\nage = input("Quel âge avez-vous ? ")\nprint(f"L\'année prochaine vous aurez {int(age)+1} ans.")\n\nprint("Résultat calcul :", utils.add(10, 20))\n',
+        'utils.py': '# Module auxiliaire\ndef add(a, b):\n    return a + b\n'
     };
     let activeFile = 'main.py';
     let monacoEditor = null;
     let fileModels = {};
     let errorDecorations = [];
-    let stdinBuffer = [];
-    let lastStderr = "";
+    let currentProcessId = null;
+    let pollInterval = null;
+    let fullConsoleHistory = "";
 
     require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs' }});
     require(['vs/editor/editor.main'], function() {
@@ -237,56 +246,120 @@
         if (!monacoEditor) return;
         files[activeFile] = monacoEditor.getValue();
 
+        stopExecution();
         clearErrorHighlight();
+        setWaitingInputState(false);
+        
         const consoleOut = document.getElementById('console-output');
-        consoleOut.innerHTML = '⚡ Exécution en cours...\n';
+        consoleOut.innerText = '⚡ Démarrage du script...\n';
+        fullConsoleHistory = consoleOut.innerText;
         
         document.getElementById('status-text').innerHTML = `<i class="fa-solid fa-spinner fa-spin" style="color: var(--accent-yellow);"></i> En cours...`;
 
-        const res = await fetch('/run', {
+        const res = await fetch('/api/start', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({
                 files: files,
-                entrypoint: 'main.py',
-                stdin: stdinBuffer.join('\n')
+                entrypoint: 'main.py'
             })
         });
 
         const data = await res.json();
-        consoleOut.innerText = data.stdout || '';
-        lastStderr = data.stderr || '';
-
-        if (data.stderr) {
-            if (data.stdout) consoleOut.innerText += '\n';
-            consoleOut.innerText += data.stderr;
-
-            if (data.error_line) {
-                highlightErrorLine(data.error_line);
-            }
-            renderErrorCard(data.error_msg || "Une erreur s'est produite lors de l'exécution.");
+        if (data.process_id) {
+            currentProcessId = data.process_id;
+            pollInterval = setInterval(pollProcessOutput, 150);
+        } else {
+            consoleOut.innerText = "Erreur au démarrage: " + (data.error || "Inconnu");
+            document.getElementById('status-text').innerHTML = `<i class="fa-solid fa-circle" style="color: var(--accent-red); font-size: 8px;"></i> Erreur`;
         }
-
-        if (data.stderr.includes("EOFError")) {
-            consoleOut.innerText += "\n\n💡 [Astuce input()]: Votre code demande une saisie utilisateur ! Saisissez vos valeurs dans la barre sous la console puis ré-exécutez.";
-        }
-
-        document.getElementById('status-text').innerHTML = `<i class="fa-solid fa-circle" style="color: ${data.returncode === 0 ? 'var(--accent-green)' : 'var(--accent-red)'}; font-size: 8px;"></i> ${data.returncode === 0 ? 'Terminé' : 'Erreur'}`;
     }
 
-    function addInputToBuffer() {
+    async function pollProcessOutput() {
+        if (!currentProcessId) return;
+
+        const res = await fetch(`/api/poll/${currentProcessId}`);
+        if (!res.ok) return;
+
+        const data = await res.json();
+        const consoleOut = document.getElementById('console-output');
+
+        if (data.output) {
+            consoleOut.innerText += data.output;
+            fullConsoleHistory += data.output;
+            consoleOut.scrollTop = consoleOut.scrollHeight;
+        }
+
+        if (data.status === 'running') {
+            // Détection si Python est en train d'attendre une saisie input()
+            const text = consoleOut.innerText;
+            if (text && !text.endsWith('\n')) {
+                setWaitingInputState(true);
+            } else {
+                setWaitingInputState(false);
+            }
+        } else if (data.status === 'finished') {
+            clearInterval(pollInterval);
+            pollInterval = null;
+            setWaitingInputState(false);
+            
+            if (data.returncode !== 0) {
+                if (data.error_line) {
+                    highlightErrorLine(data.error_line);
+                }
+                renderErrorCard(data.error_msg || "Une erreur est survenue lors de l'exécution.");
+            }
+
+            document.getElementById('status-text').innerHTML = `<i class="fa-solid fa-circle" style="color: ${data.returncode === 0 ? 'var(--accent-green)' : 'var(--accent-red)'}; font-size: 8px;"></i> ${data.returncode === 0 ? 'Terminé' : 'Erreur'}`;
+            currentProcessId = null;
+        }
+    }
+
+    function setWaitingInputState(isWaiting) {
+        const banner = document.getElementById('input-waiting-banner');
+        const inputBar = document.getElementById('console-input-bar');
+        const inputEl = document.getElementById('console-input');
+
+        if (isWaiting) {
+            banner.style.display = 'flex';
+            inputBar.classList.add('active-waiting');
+            inputEl.focus();
+        } else {
+            banner.style.display = 'none';
+            inputBar.classList.remove('active-waiting');
+        }
+    }
+
+    async function sendConsoleInput() {
         const inputEl = document.getElementById('console-input');
         const text = inputEl.value;
-        if (!text) return;
-        
-        stdinBuffer.push(text);
-        const consoleOut = document.getElementById('console-output');
-        consoleOut.innerText += `\n❯ [Entrée enregistrée]: ${text}`;
+        if (!currentProcessId) return;
+
         inputEl.value = '';
+        setWaitingInputState(false);
+
+        await fetch(`/api/input/${currentProcessId}`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ input: text })
+        });
     }
 
     function handleInputKeyPress(e) {
-        if (e.key === 'Enter') addInputToBuffer();
+        if (e.key === 'Enter') sendConsoleInput();
+    }
+
+    async function stopExecution() {
+        if (pollInterval) {
+            clearInterval(pollInterval);
+            pollInterval = null;
+        }
+        if (currentProcessId) {
+            await fetch(`/api/stop/${currentProcessId}`, { method: 'POST' });
+            currentProcessId = null;
+        }
+        setWaitingInputState(false);
+        document.getElementById('status-text').innerHTML = `<i class="fa-solid fa-circle" style="color: var(--accent-red); font-size: 8px;"></i> Interrompu`;
     }
 
     function highlightErrorLine(lineNum) {
@@ -325,7 +398,7 @@
     }
 
     function copyErrorToClipboard() {
-        navigator.clipboard.writeText(lastStderr).then(() => alert("Traceback d'erreur copié !"));
+        navigator.clipboard.writeText(fullConsoleHistory).then(() => alert("Traceback d'erreur copié !"));
     }
 
     function setViewMode(mode) {
@@ -340,8 +413,9 @@
 
     function clearConsole() {
         document.getElementById('console-output').innerHTML = '';
-        stdinBuffer = [];
+        fullConsoleHistory = "";
         clearErrorHighlight();
+        setWaitingInputState(false);
     }
 
     function renderFileTree() {
@@ -381,7 +455,7 @@
         if (!fileModels[fname]) {
             fileModels[fname] = monaco.editor.createModel(files[fname], 'python');
         }
-        monacoEditor.setModel(fileModels[fname]);
+        monacoEditor.setModel(fileModels[activeFile]);
         renderFileTree();
         renderTabs();
         checkSyntax();
