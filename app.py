@@ -9,11 +9,12 @@ import uuid
 import time
 import re
 import threading
+import io
 from flask import Flask, render_template, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'dev-secret-key-studio-v6'
+app.config['SECRET_KEY'] = 'dev-secret-key-studio-v7'
 
 # Base de données SQLite local / PostgreSQL sur Render
 db_url = os.environ.get('DATABASE_URL', 'sqlite:///editor.db')
@@ -31,14 +32,13 @@ class Project(db.Model):
 with app.app_context():
     db.create_all()
 
-# Maintien des processus interactifs
 running_processes = {}
 
 def cleanup_old_processes():
     now = time.time()
     to_delete = []
     for pid, info in running_processes.items():
-        if now - info.get('created_at', now) > 300: # Timeout de sécurité : 5 min
+        if now - info.get('created_at', now) > 300: # 5 minutes max
             try:
                 info['proc'].kill()
             except Exception:
@@ -67,7 +67,6 @@ def start_execution():
     process_id = str(uuid.uuid4())
     temp_dir = tempfile.mkdtemp(prefix="py_exec_")
 
-    # Écriture de tous les fichiers du projet dans le dossier temporaire
     for fname, content in files.items():
         fpath = os.path.join(temp_dir, fname)
         os.makedirs(os.path.dirname(fpath), exist_ok=True)
@@ -75,9 +74,12 @@ def start_execution():
             f.write(content)
 
     exec_path = os.path.join(temp_dir, entrypoint)
+    
+    # Configuration stricte de l'encodage UTF-8
     env = os.environ.copy()
     env["PYTHONUNBUFFERED"] = "1"
     env["PYTHONIOENCODING"] = "utf-8"
+    env["PYTHONUTF8"] = "1"
 
     try:
         proc = subprocess.Popen(
@@ -101,13 +103,14 @@ def start_execution():
         running_processes[process_id] = proc_info
 
         def read_output():
+            # Utilisation de TextIOWrapper pour assembler les multi-octets UTF-8 sans altérer les accents
+            stdout_reader = io.TextIOWrapper(proc.stdout, encoding='utf-8', errors='replace', newline='')
             while True:
-                chunk = proc.stdout.read(1)
-                if chunk == b'' and proc.poll() is not None:
+                char = stdout_reader.read(1)
+                if char == '' and proc.poll() is not None:
                     break
-                if chunk:
-                    text = chunk.decode('utf-8', errors='replace')
-                    proc_info['output'].append(text)
+                if char:
+                    proc_info['output'].append(char)
             
             proc_info['returncode'] = proc.wait()
             proc_info['status'] = 'finished'
@@ -161,7 +164,6 @@ def send_input(process_id):
         try:
             info['proc'].stdin.write(user_input.encode('utf-8'))
             info['proc'].stdin.flush()
-            # On affiche l'entrée utilisateur dans la console de sortie
             info['output'].append(user_input)
             return jsonify({'status': 'sent'})
         except Exception as e:
