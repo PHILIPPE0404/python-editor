@@ -120,11 +120,14 @@
         <i class="fa-solid fa-box"></i> Installer Package
     </button>
 
-    <div style="margin-left: auto; display: flex; gap: 8px;">
-        <button class="btn" onclick="toggleFullscreen('editor')" title="Plein écran Éditeur">
+    <div style="margin-left: auto; display: flex; gap: 6px;">
+        <button class="btn" onclick="setViewMode('split')" title="Vue Divisée (Éditeur + Console)">
+            <i class="fa-solid fa-columns"></i> Vue Divisée
+        </button>
+        <button class="btn" onclick="setViewMode('editor')" title="Plein écran Éditeur">
             <i class="fa-solid fa-expand"></i> Éditeur
         </button>
-        <button class="btn" onclick="toggleFullscreen('console')" title="Plein écran Console">
+        <button class="btn" onclick="setViewMode('console')" title="Plein écran Console">
             <i class="fa-solid fa-terminal"></i> Console
         </button>
     </div>
