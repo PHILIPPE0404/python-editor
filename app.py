@@ -1,57 +1,66 @@
 import os
 import sys
 import subprocess
-import io
-from flask import Flask, render_template, request, jsonify, send_file
+import tempfile
+import shutil
+import ast
+import pty
+import select
+import threading
+import json
+from flask import Flask, render_template, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
+from flask_socketio import SocketIO, emit
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'dev-secret-key-render'
+app.config['SECRET_KEY'] = 'dev-secret-key-render-v2'
 
-# Support de SQLite en local et PostgreSQL sur Render
+# Database SQLite local / PostgreSQL sur Render
 db_url = os.environ.get('DATABASE_URL', 'sqlite:///editor.db')
 if db_url.startswith("postgres://"):
     db_url = db_url.replace("postgres://", "postgresql://", 1)
 app.config['SQLALCHEMY_DATABASE_URI'] = db_url
 
 db = SQLAlchemy(app)
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 
-class SavedScript(db.Model):
+class Project(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    filename = db.Column(db.String(100), nullable=False)
-    content = db.Column(db.Text, nullable=False)
+    name = db.Column(db.String(100), nullable=False)
+    files_json = db.Column(db.Text, nullable=False)
 
 with app.app_context():
     db.create_all()
 
+running_processes = {}
+
 @app.route('/')
 def index():
-    scripts = SavedScript.query.all()
-    return render_template('index.html', scripts=scripts)
+    projects = Project.query.all()
+    return render_template('index.html', projects=projects)
 
-@app.route('/run', methods=['POST'])
-def run_code():
+@app.route('/syntax_check', methods=['POST'])
+def syntax_check():
     data = request.json or {}
     code = data.get('code', '')
+    filename = data.get('filename', 'main.py')
+    
     try:
-        result = subprocess.run(
-            [sys.executable, '-c', code],
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
+        ast.parse(code, filename=filename)
+        return jsonify({'valid': True})
+    except SyntaxError as e:
         return jsonify({
-            'stdout': result.stdout,
-            'stderr': result.stderr,
-            'returncode': result.returncode
+            'valid': False,
+            'line': e.lineno or 1,
+            'column': e.offset or 1,
+            'msg': e.msg,
+            'text': e.text or ''
         })
-    except subprocess.TimeoutExpired:
-        return jsonify({'stderr': 'Erreur : Temps d exécution limite dépassé (10s max).', 'stdout': '', 'returncode': -1})
     except Exception as e:
-        return jsonify({'stderr': str(e), 'stdout': '', 'returncode': -1})
+        return jsonify({'valid': False, 'line': 1, 'column': 1, 'msg': str(e), 'text': ''})
 
-@app.route('/install', methods=['POST'])
-def install_library():
+@app.route('/install_package', methods=['POST'])
+def install_package():
     data = request.json or {}
     package = data.get('package', '').strip()
     if not package:
@@ -67,35 +76,166 @@ def install_library():
     except Exception as e:
         return jsonify({'output': str(e)})
 
-@app.route('/save', methods=['POST'])
-def save_script():
+@app.route('/save_project', methods=['POST'])
+def save_project():
     data = request.json or {}
-    filename = data.get('filename', 'script.py')
-    content = data.get('code', '')
+    name = data.get('name', 'Mon Projet')
+    files = data.get('files', {})
+    files_json = json.dumps(files)
     
-    script = SavedScript.query.filter_by(filename=filename).first()
-    if script:
-        script.content = content
+    project = Project.query.filter_by(name=name).first()
+    if project:
+        project.files_json = files_json
     else:
-        script = SavedScript(filename=filename, content=content)
-        db.session.add(script)
+        project = Project(name=name, files_json=files_json)
+        db.session.add(project)
     
     db.session.commit()
-    return jsonify({'status': 'Succès', 'id': script.id})
+    return jsonify({'status': 'success', 'id': project.id})
 
-@app.route('/load/<int:script_id>')
-def load_script(script_id):
-    script = SavedScript.query.get_or_404(script_id)
-    return jsonify({'filename': script.filename, 'content': script.content})
+@app.route('/load_project/<int:project_id>')
+def load_project(project_id):
+    project = Project.query.get_or_404(project_id)
+    return jsonify({'name': project.name, 'files': json.loads(project.files_json)})
 
-@app.route('/export', methods=['POST'])
-def export_file():
-    filename = request.form.get('filename', 'script.py')
-    code = request.form.get('code', '')
-    buffer = io.BytesIO()
-    buffer.write(code.encode('utf-8'))
-    buffer.seek(0)
-    return send_file(buffer, as_attachment=True, download_name=filename, mimetype='text/x-python')
+# WebSockets pour exécution interactive et streaming
+@socketio.on('start_execution')
+def handle_start_execution(data):
+    sid = request.sid
+    files = data.get('files', {})
+    entrypoint = data.get('entrypoint', 'main.py')
+    
+    if entrypoint not in files:
+        emit('output', {'data': f"Erreur: Le fichier d'entrée '{entrypoint}' n'existe pas.\n", 'type': 'stderr'})
+        emit('execution_finished', {'code': 1})
+        return
+
+    temp_dir = tempfile.mkdtemp(prefix="py_exec_")
+    
+    for filename, content in files.items():
+        filepath = os.path.join(temp_dir, filename)
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        with open(filepath, 'w', encoding='utf-8') as f:
+            f.write(content)
+            
+    exec_file = os.path.join(temp_dir, entrypoint)
+    
+    try:
+        if os.name != 'nt':  # Linux / Render / macOS
+            master, slave = pty.openpty()
+            proc = subprocess.Popen(
+                [sys.executable, '-u', exec_file],
+                cwd=temp_dir,
+                stdin=slave,
+                stdout=slave,
+                stderr=slave,
+                close_fds=True
+            )
+            os.close(slave)
+            running_processes[sid] = {'proc': proc, 'master': master, 'temp_dir': temp_dir, 'is_pty': True}
+            
+            def read_output():
+                while True:
+                    try:
+                        r, _, _ = select.select([master], [], [], 0.1)
+                        if r:
+                            data_chunk = os.read(master, 1024).decode('utf-8', errors='replace')
+                            if not data_chunk:
+                                break
+                            socketio.emit('output', {'data': data_chunk, 'type': 'stdout'}, room=sid)
+                    except Exception:
+                        break
+                    if proc.poll() is not None:
+                        try:
+                            while True:
+                                r, _, _ = select.select([master], [], [], 0.05)
+                                if not r:
+                                    break
+                                data_chunk = os.read(master, 1024).decode('utf-8', errors='replace')
+                                if not data_chunk:
+                                    break
+                                socketio.emit('output', {'data': data_chunk, 'type': 'stdout'}, room=sid)
+                        except Exception:
+                            pass
+                        break
+                
+                returncode = proc.wait()
+                try:
+                    os.close(master)
+                except Exception:
+                    pass
+                shutil.rmtree(temp_dir, ignore_errors=True)
+                socketio.emit('execution_finished', {'code': returncode}, room=sid)
+                if sid in running_processes:
+                    del running_processes[sid]
+
+            thread = threading.Thread(target=read_output)
+            thread.daemon = True
+            thread.start()
+
+        else:  # Windows local fallback
+            proc = subprocess.Popen(
+                [sys.executable, '-u', exec_file],
+                cwd=temp_dir,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                bufsize=0
+            )
+            running_processes[sid] = {'proc': proc, 'temp_dir': temp_dir, 'is_pty': False}
+
+            def read_output_win():
+                while True:
+                    out = proc.stdout.read(1)
+                    if out == b'' and proc.poll() is not None:
+                        break
+                    if out:
+                        char = out.decode('utf-8', errors='replace')
+                        socketio.emit('output', {'data': char, 'type': 'stdout'}, room=sid)
+                
+                returncode = proc.wait()
+                shutil.rmtree(temp_dir, ignore_errors=True)
+                socketio.emit('execution_finished', {'code': returncode}, room=sid)
+                if sid in running_processes:
+                    del running_processes[sid]
+
+            thread = threading.Thread(target=read_output_win)
+            thread.daemon = True
+            thread.start()
+
+    except Exception as e:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        emit('output', {'data': f"Erreur lors du lancement: {str(e)}\n", 'type': 'stderr'})
+        emit('execution_finished', {'code': 1})
+
+@socketio.on('input_data')
+def handle_input_data(data):
+    sid = request.sid
+    input_text = data.get('input', '') + '\n'
+    if sid in running_processes:
+        info = running_processes[sid]
+        proc = info['proc']
+        if proc.poll() is None:
+            try:
+                if info.get('is_pty'):
+                    os.write(info['master'], input_text.encode('utf-8'))
+                else:
+                    proc.stdin.write(input_text.encode('utf-8'))
+                    proc.stdin.flush()
+            except Exception as e:
+                emit('output', {'data': f"\n[Erreur d'entrée: {str(e)}]\n", 'type': 'stderr'})
+
+@socketio.on('stop_execution')
+def handle_stop_execution():
+    sid = request.sid
+    if sid in running_processes:
+        info = running_processes[sid]
+        proc = info['proc']
+        try:
+            proc.kill()
+        except Exception:
+            pass
+        emit('output', {'data': "\n[Processus interrompu par l'utilisateur.]\n", 'type': 'stderr'})
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    socketio.run(app, host='0.0.0.0', port=5000, debug=True)
