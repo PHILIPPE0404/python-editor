@@ -3,10 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Python Cloud Studio IDE</title>
+    <title>Python Cloud Studio</title>
     
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/loader.min.js"></script>
 
     <style>
@@ -28,74 +27,69 @@
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: 'Inter', system-ui, sans-serif; background: var(--bg-main); color: var(--text-main); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
 
-        header { background: var(--bg-header); border-bottom: 1px solid var(--border-color); height: 50px; display: flex; align-items: center; padding: 0 15px; gap: 12px; z-index: 100; }
-        .logo { font-weight: 700; font-size: 16px; color: var(--accent-blue); display: flex; align-items: center; gap: 8px; margin-right: 15px; }
+        header { background: var(--bg-header); border-bottom: 1px solid var(--border-color); height: 50px; display: flex; align-items: center; padding: 0 15px; gap: 10px; z-index: 100; }
+        .logo { font-weight: 700; font-size: 16px; color: var(--accent-blue); display: flex; align-items: center; gap: 8px; margin-right: 10px; }
         
         .btn { background: #313244; color: var(--text-main); border: 1px solid #45475a; padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: all 0.2s; }
         .btn:hover { background: #45475a; color: #fff; }
         .btn-success { background: #234731; color: var(--accent-green); border-color: #2e5c3e; }
         .btn-success:hover { background: #2e5c3e; }
-        .btn-danger { background: #52232d; color: var(--accent-red); border-color: #6b2d3b; }
-        .btn-danger:hover { background: #6b2d3b; }
 
-        .project-title { background: transparent; border: 1px solid transparent; color: var(--text-main); font-weight: 600; font-size: 14px; padding: 4px 8px; border-radius: 4px; }
+        .project-title { background: transparent; border: 1px solid transparent; color: var(--text-main); font-weight: 600; font-size: 14px; padding: 4px 8px; border-radius: 4px; width: 180px; }
         .project-title:focus { border-color: var(--accent-blue); outline: none; background: #1e1e2e; }
 
         .ide-container { flex: 1; display: flex; height: calc(100vh - 75px); position: relative; }
 
-        .sidebar { width: 240px; background: var(--bg-sidebar); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; transition: all 0.3s ease; }
+        /* Sidebar à gauche avec fichiers */
+        .sidebar { width: 240px; background: var(--bg-sidebar); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; }
         .sidebar-header { padding: 12px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-dim); border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; }
         .file-tree { flex: 1; overflow-y: auto; padding: 8px 0; }
-        .file-item { padding: 8px 16px; font-size: 13px; color: var(--text-main); cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 8px; border-left: 3px solid transparent; }
+        .file-item { padding: 8px 16px; font-size: 13px; color: var(--text-main); cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
         .file-item:hover { background: #2a2b3d; }
-        .file-item.active { background: #313244; border-left-color: var(--accent-blue); font-weight: 600; }
+        .file-item.active { background: #313244; border-left: 3px solid var(--accent-blue); font-weight: 600; }
         .file-actions { display: none; gap: 6px; }
         .file-item:hover .file-actions { display: flex; }
-        .file-actions i { font-size: 12px; color: var(--text-dim); }
         .file-actions i:hover { color: var(--accent-red); }
 
-        .workspace { flex: 1; display: flex; flex-direction: column; background: var(--bg-main); overflow: hidden; position: relative; }
+        .workspace { flex: 1; display: flex; flex-direction: column; background: var(--bg-main); overflow: hidden; }
 
         .tabs-bar { height: 38px; background: var(--bg-header); border-bottom: 1px solid var(--border-color); display: flex; overflow-x: auto; align-items: center; }
-        .tab { height: 100%; padding: 0 16px; background: #181825; color: var(--text-dim); border-right: 1px solid var(--border-color); font-size: 13px; display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
+        .tab { height: 100%; padding: 0 16px; background: #181825; color: var(--text-dim); border-right: 1px solid var(--border-color); font-size: 13px; display: flex; align-items: center; gap: 8px; cursor: pointer; }
         .tab.active { background: var(--bg-editor); color: var(--accent-blue); border-top: 2px solid var(--accent-blue); font-weight: 500; }
-        .tab-close { font-size: 11px; border-radius: 50%; padding: 2px; }
-        .tab-close:hover { background: #45475a; color: #fff; }
+        .tab-close:hover { color: var(--accent-red); }
 
         .editor-container { flex: 6; position: relative; width: 100%; height: 100%; }
         #monaco-editor { width: 100%; height: 100%; }
 
-        .console-panel { flex: 4; background: var(--bg-console); border-top: 1px solid var(--border-color); display: flex; flex-direction: column; position: relative; transition: all 0.3s ease; }
+        .console-panel { flex: 4; background: var(--bg-console); border-top: 1px solid var(--border-color); display: flex; flex-direction: column; }
         .console-header { height: 35px; background: #181825; padding: 0 12px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border-color); font-size: 12px; font-weight: 600; color: var(--text-dim); }
         
-        .console-output { flex: 1; padding: 12px; font-family: 'JetBrains Mono', Consolas, monospace; font-size: 13px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; color: var(--accent-green); }
+        .console-output { flex: 1; padding: 12px; font-family: 'Consolas', 'Courier New', monospace; font-size: 13px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; color: var(--accent-green); }
         
         .console-input-bar { display: flex; border-top: 1px solid var(--border-color); background: #181825; padding: 6px 12px; gap: 8px; align-items: center; }
         .console-prompt { color: var(--accent-yellow); font-family: monospace; font-weight: bold; }
         .console-input { flex: 1; background: #11111b; border: 1px solid var(--border-color); color: #fff; padding: 6px 10px; border-radius: 4px; font-family: monospace; font-size: 13px; outline: none; }
-        .console-input:focus { border-color: var(--accent-blue); }
 
-        .workspace.fullscreen-editor .console-panel { display: none !important; }
-        .workspace.fullscreen-editor .editor-container { flex: 1 !important; }
+        /* Modes de Vue */
+        .workspace.mode-editor .console-panel { display: none !important; }
+        .workspace.mode-editor .editor-container { flex: 1 !important; }
         
-        .workspace.fullscreen-console .editor-container { display: none !important; }
-        .workspace.fullscreen-console .tabs-bar { display: none !important; }
-        .workspace.fullscreen-console .console-panel { flex: 1 !important; }
+        .workspace.mode-console .editor-container, .workspace.mode-console .tabs-bar { display: none !important; }
+        .workspace.mode-console .console-panel { flex: 1 !important; }
 
-        .error-card { background: #2a1b24; border: 1px solid #f38ba8; border-radius: 6px; padding: 10px 14px; margin: 8px 0; color: #f38ba8; font-family: sans-serif; font-size: 13px; }
+        /* Erreurs Visuelles */
+        .error-card { background: #2a1b24; border: 1px solid #f38ba8; border-radius: 6px; padding: 12px; margin: 10px 0; color: #f38ba8; font-family: sans-serif; font-size: 13px; }
         .error-card-header { display: flex; justify-content: space-between; align-items: center; font-weight: 700; margin-bottom: 6px; }
-        .error-copy-btn { background: #f38ba8; color: #11111b; border: none; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; cursor: pointer; }
+        .error-copy-btn { background: #f38ba8; color: #11111b; border: none; padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: bold; cursor: pointer; }
         .error-copy-btn:hover { background: #fff; }
 
         footer { height: 25px; background: #11111b; border-top: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; padding: 0 15px; font-size: 11px; color: var(--text-dim); }
-        .status-item { display: flex; align-items: center; gap: 6px; }
 
-        .error-line-highlight { background: rgba(243, 139, 168, 0.25) !important; width: 100% !important; }
+        .error-line-highlight { background: rgba(243, 139, 168, 0.3) !important; width: 100% !important; }
 
         .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 1000; justify-content: center; align-items: center; }
         .modal-content { background: var(--bg-sidebar); border: 1px solid var(--border-color); border-radius: 8px; padding: 20px; width: 400px; color: var(--text-main); }
-        .modal-content h3 { margin-bottom: 12px; }
-        .modal-content input { width: 100%; padding: 8px; background: var(--bg-main); border: 1px solid var(--border-color); color: #fff; border-radius: 4px; margin-bottom: 12px; }
+        .modal-content input { width: 100%; padding: 8px; background: var(--bg-main); border: 1px solid var(--border-color); color: #fff; border-radius: 4px; margin: 12px 0; }
     </style>
 </head>
 <body>
@@ -110,9 +104,6 @@
     <button class="btn btn-success" onclick="runProject()">
         <i class="fa-solid fa-play"></i> Exécuter
     </button>
-    <button class="btn btn-danger" onclick="stopExecution()">
-        <i class="fa-solid fa-stop"></i> Arrêter
-    </button>
     <button class="btn" onclick="saveProjectToDB()">
         <i class="fa-solid fa-floppy-disk"></i> Sauvegarder
     </button>
@@ -121,23 +112,24 @@
     </button>
 
     <div style="margin-left: auto; display: flex; gap: 6px;">
-        <button class="btn" onclick="setViewMode('split')" title="Vue Divisée (Éditeur + Console)">
+        <button class="btn" onclick="setViewMode('split')" title="Vue Divisée">
             <i class="fa-solid fa-columns"></i> Vue Divisée
         </button>
-        <button class="btn" onclick="setViewMode('editor')" title="Plein écran Éditeur">
+        <button class="btn" onclick="setViewMode('editor')" title="Éditeur Fullscreen">
             <i class="fa-solid fa-expand"></i> Éditeur
         </button>
-        <button class="btn" onclick="setViewMode('console')" title="Plein écran Console">
+        <button class="btn" onclick="setViewMode('console')" title="Console Fullscreen">
             <i class="fa-solid fa-terminal"></i> Console
         </button>
     </div>
 </header>
 
 <div class="ide-container">
-    <div class="sidebar" id="sidebar">
+    <!-- Volet Latéral des Fichiers -->
+    <div class="sidebar">
         <div class="sidebar-header">
-            <span>Explorateur de fichiers</span>
-            <i class="fa-solid fa-file-circle-plus" style="cursor:pointer;" onclick="promptNewFile()" title="Nouveau Fichier"></i>
+            <span>Fichiers du Projet</span>
+            <i class="fa-solid fa-plus" style="cursor:pointer;" onclick="promptNewFile()" title="Nouveau Fichier"></i>
         </div>
         <div class="file-tree" id="file-tree"></div>
 
@@ -153,6 +145,7 @@
         </div>
     </div>
 
+    <!-- Zone de Travail -->
     <div class="workspace" id="workspace">
         <div class="tabs-bar" id="tabs-bar"></div>
 
@@ -162,39 +155,37 @@
 
         <div class="console-panel" id="console-panel">
             <div class="console-header">
-                <span><i class="fa-solid fa-terminal"></i> CONSOLE INTERACTIVE</span>
+                <span><i class="fa-solid fa-terminal"></i> CONSOLE</span>
                 <button class="btn" style="padding: 2px 8px; font-size: 11px;" onclick="clearConsole()">
                     <i class="fa-solid fa-trash-can"></i> Effacer
                 </button>
             </div>
             
-            <div class="console-output" id="console-output">Appuie sur [Exécuter] pour démarrer...</div>
+            <div class="console-output" id="console-output">Cliquez sur [Exécuter] pour lancer le script...</div>
             
             <div class="console-input-bar">
                 <span class="console-prompt">❯</span>
-                <input type="text" id="console-input" class="console-input" placeholder="Écris une valeur pour input() puis valide..." onkeypress="handleInputKeyPress(event)">
-                <button class="btn btn-success" style="padding: 4px 10px;" onclick="sendInput()">Envoyer</button>
+                <input type="text" id="console-input" class="console-input" placeholder="Saisir des réponses pour input() puis appuyer sur Entrée..." onkeypress="handleInputKeyPress(event)">
+                <button class="btn btn-success" style="padding: 4px 10px;" onclick="addInputToBuffer()">Ajouter Entrée</button>
             </div>
         </div>
     </div>
 </div>
 
 <footer>
-    <div class="status-item" id="status-text">
+    <div id="status-text">
         <i class="fa-solid fa-circle" style="color: var(--accent-green); font-size: 8px;"></i> Prêt
     </div>
-    <div class="status-item" id="syntax-status">
+    <div id="syntax-status">
         <i class="fa-solid fa-check-double"></i> Syntaxe OK
     </div>
-    <div class="status-item">
-        Python 3.10+ | Monaco Engine
-    </div>
+    <div>Monaco Engine | Python 3.10+</div>
 </footer>
 
 <div class="modal" id="pip-modal">
     <div class="modal-content">
         <h3>Installer une bibliothèque Pip</h3>
-        <input type="text" id="pip-package-input" placeholder="ex: requests, numpy, pandas">
+        <input type="text" id="pip-package-input" placeholder="ex: requests, pandas, numpy">
         <div style="display: flex; gap: 10px; justify-content: flex-end;">
             <button class="btn" onclick="closePipModal()">Annuler</button>
             <button class="btn btn-success" onclick="installPipPackage()">Installer</button>
@@ -204,16 +195,15 @@
 
 <script>
     let files = {
-        'main.py': '# Fichier principal\nimport utils\n\nname = input("Quel est ton nom ? ")\nprint(f"Bonjour {name} !")\nprint("Calcul:", utils.add(10, 20))\n',
-        'utils.py': '# Module auxiliaire\ndef add(a, b):\n    return a + b\n'
+        'main.py': '# Fichier principal\nimport utils\n\nname = input("Quel est votre prénom ? ")\nprint(f"Bonjour {name} !")\nprint("Somme:", utils.add(15, 25))\n',
+        'utils.py': '# Fichier auxiliaire\ndef add(a, b):\n    return a + b\n'
     };
     let activeFile = 'main.py';
     let monacoEditor = null;
     let fileModels = {};
     let errorDecorations = [];
-    let socket = null;
-    let isRunning = false;
-    let currentTraceback = "";
+    let stdinBuffer = [];
+    let lastStderr = "";
 
     require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs' }});
     require(['vs/editor/editor.main'], function() {
@@ -224,7 +214,6 @@
             fontSize: 14,
             fontFamily: "Consolas, monospace",
             minimap: { enabled: true },
-            bracketPairColorization: { enabled: true },
             quickSuggestions: true,
             suggestOnTriggerCharacters: true
         });
@@ -244,65 +233,114 @@
         checkSyntax();
     });
 
-    socket = io();
-
-    socket.on('output', function(msg) {
-        const consoleOut = document.getElementById('console-output');
-        consoleOut.innerText += msg.data;
-        currentTraceback += msg.data;
-        consoleOut.scrollTop = consoleOut.scrollHeight;
-
-        detectExecutionError(currentTraceback);
-    });
-
-    socket.on('execution_finished', function(data) {
-        isRunning = false;
-        document.getElementById('status-text').innerHTML = `<i class="fa-solid fa-circle" style="color: var(--accent-green); font-size: 8px;"></i> Terminé (Code: ${data.code})`;
-    });
-
-    function runProject() {
+    async function runProject() {
         if (!monacoEditor) return;
         files[activeFile] = monacoEditor.getValue();
-        
-        clearConsole();
-        currentTraceback = "";
+
         clearErrorHighlight();
+        const consoleOut = document.getElementById('console-output');
+        consoleOut.innerHTML = '⚡ Exécution en cours...\n';
+        
+        document.getElementById('status-text').innerHTML = `<i class="fa-solid fa-spinner fa-spin" style="color: var(--accent-yellow);"></i> En cours...`;
 
-        document.getElementById('status-text').innerHTML = `<i class="fa-solid fa-spinner fa-spin" style="color: var(--accent-yellow);"></i> Exécution...`;
-        isRunning = true;
-
-        socket.emit('start_execution', {
-            files: files,
-            entrypoint: 'main.py'
+        const res = await fetch('/run', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                files: files,
+                entrypoint: 'main.py',
+                stdin: stdinBuffer.join('\n')
+            })
         });
+
+        const data = await res.json();
+        consoleOut.innerText = data.stdout || '';
+        lastStderr = data.stderr || '';
+
+        if (data.stderr) {
+            if (data.stdout) consoleOut.innerText += '\n';
+            consoleOut.innerText += data.stderr;
+
+            if (data.error_line) {
+                highlightErrorLine(data.error_line);
+            }
+            renderErrorCard(data.error_msg || "Une erreur s'est produite lors de l'exécution.");
+        }
+
+        if (data.stderr.includes("EOFError")) {
+            consoleOut.innerText += "\n\n💡 [Astuce input()]: Votre code demande une saisie utilisateur ! Saisissez vos valeurs dans la barre sous la console puis ré-exécutez.";
+        }
+
+        document.getElementById('status-text').innerHTML = `<i class="fa-solid fa-circle" style="color: ${data.returncode === 0 ? 'var(--accent-green)' : 'var(--accent-red)'}; font-size: 8px;"></i> ${data.returncode === 0 ? 'Terminé' : 'Erreur'}`;
     }
 
-    function stopExecution() {
-        socket.emit('stop_execution');
-        isRunning = false;
-        document.getElementById('status-text').innerHTML = `<i class="fa-solid fa-circle" style="color: var(--accent-red); font-size: 8px;"></i> Interrompu`;
-    }
-
-    function sendInput() {
+    function addInputToBuffer() {
         const inputEl = document.getElementById('console-input');
         const text = inputEl.value;
-        if (!text && !isRunning) return;
+        if (!text) return;
         
+        stdinBuffer.push(text);
         const consoleOut = document.getElementById('console-output');
-        consoleOut.innerText += text + "\n";
-        consoleOut.scrollTop = consoleOut.scrollHeight;
-
-        socket.emit('input_data', { input: text });
+        consoleOut.innerText += `\n❯ [Entrée enregistrée]: ${text}`;
         inputEl.value = '';
     }
 
     function handleInputKeyPress(e) {
-        if (e.key === 'Enter') sendInput();
+        if (e.key === 'Enter') addInputToBuffer();
+    }
+
+    function highlightErrorLine(lineNum) {
+        errorDecorations = monacoEditor.deltaDecorations(errorDecorations, [
+            {
+                range: new monaco.Range(lineNum, 1, lineNum, 1),
+                options: {
+                    isWholeLine: true,
+                    className: 'error-line-highlight'
+                }
+            }
+        ]);
+        monacoEditor.revealLineInCenter(lineNum);
+    }
+
+    function clearErrorHighlight() {
+        errorDecorations = monacoEditor.deltaDecorations(errorDecorations, []);
+        const errCard = document.getElementById('error-card-element');
+        if (errCard) errCard.remove();
+    }
+
+    function renderErrorCard(msg) {
+        const consoleOut = document.getElementById('console-output');
+        const card = document.createElement('div');
+        card.id = 'error-card-element';
+        card.className = 'error-card';
+        card.innerHTML = `
+            <div class="error-card-header">
+                <span>🚨 Ligne surlignée dans l'éditeur</span>
+                <button class="error-copy-btn" onclick="copyErrorToClipboard()">📋 Copier l'erreur</button>
+            </div>
+            <div>${msg}</div>
+        `;
+        consoleOut.appendChild(card);
+        consoleOut.scrollTop = consoleOut.scrollHeight;
+    }
+
+    function copyErrorToClipboard() {
+        navigator.clipboard.writeText(lastStderr).then(() => alert("Traceback d'erreur copié !"));
+    }
+
+    function setViewMode(mode) {
+        const workspace = document.getElementById('workspace');
+        workspace.classList.remove('mode-editor', 'mode-console');
+        
+        if (mode === 'editor') workspace.classList.add('mode-editor');
+        if (mode === 'console') workspace.classList.add('mode-console');
+        
+        setTimeout(() => { if (monacoEditor) monacoEditor.layout(); }, 50);
     }
 
     function clearConsole() {
         document.getElementById('console-output').innerHTML = '';
-        currentTraceback = '';
+        stdinBuffer = [];
         clearErrorHighlight();
     }
 
@@ -315,8 +353,7 @@
             item.innerHTML = `
                 <span onclick="switchFile('${fname}')"><i class="fa-regular fa-file-code"></i> ${fname}</span>
                 <div class="file-actions">
-                    <i class="fa-solid fa-pen-to-square" onclick="renameFile('${fname}')" title="Renommer"></i>
-                    ${Object.keys(files).length > 1 ? `<i class="fa-solid fa-trash" onclick="deleteFile('${fname}')" title="Supprimer"></i>` : ''}
+                    <i class="fa-solid fa-trash" onclick="deleteFile('${fname}')"></i>
                 </div>
             `;
             tree.appendChild(item);
@@ -338,7 +375,6 @@
     }
 
     function switchFile(fname) {
-        if (!files[fname]) return;
         files[activeFile] = monacoEditor.getValue();
         activeFile = fname;
         
@@ -355,24 +391,10 @@
         const fname = prompt("Nom du fichier :", "script.py");
         if (fname && fname.trim()) {
             const name = fname.trim();
-            if (files[name]) return alert("Ce fichier existe déjà !");
-            files[name] = "# Nouveau fichier\n";
+            if (files[name]) return alert("Ce fichier existe déjà.");
+            files[name] = "# Fichier " + name + "\n";
             fileModels[name] = monaco.editor.createModel(files[name], 'python');
             switchFile(name);
-        }
-    }
-
-    function renameFile(oldName) {
-        const newName = prompt("Nouveau nom :", oldName);
-        if (newName && newName.trim() && newName !== oldName) {
-            const name = newName.trim();
-            files[name] = files[oldName];
-            delete files[oldName];
-            fileModels[name] = fileModels[oldName];
-            delete fileModels[oldName];
-            if (activeFile === oldName) activeFile = name;
-            renderFileTree();
-            renderTabs();
         }
     }
 
@@ -394,7 +416,7 @@
     let syntaxTimer = null;
     function debounceSyntaxCheck() {
         clearTimeout(syntaxTimer);
-        syntaxTimer = setTimeout(checkSyntax, 400);
+        syntaxTimer = setTimeout(checkSyntax, 300);
     }
 
     async function checkSyntax() {
@@ -419,90 +441,20 @@
                 message: data.msg,
                 severity: monaco.MarkerSeverity.Error
             }]);
-            syntaxStatus.innerHTML = `<i class="fa-solid fa-triangle-exclamation" style="color: var(--accent-red);"></i> Erreur Ligne ${data.line}: ${data.msg}`;
+            syntaxStatus.innerHTML = `<i class="fa-solid fa-triangle-exclamation" style="color: var(--accent-red);"></i> Erreur Ligne ${data.line}`;
         }
-    }
-
-    function detectExecutionError(text) {
-        const lineMatch = text.match(/File ".*?", line (\d+)/i);
-        if (lineMatch && lineMatch[1]) {
-            const lineNum = parseInt(lineMatch[1]);
-            highlightErrorLine(lineNum);
-        }
-        
-        if ((text.includes("Traceback") || text.includes("Error:")) && !document.getElementById('error-card-element')) {
-            renderErrorCard();
-        }
-    }
-
-    function highlightErrorLine(lineNum) {
-        errorDecorations = monacoEditor.deltaDecorations(errorDecorations, [
-            {
-                range: new monaco.Range(lineNum, 1, lineNum, 1),
-                options: {
-                    isWholeLine: true,
-                    className: 'error-line-highlight'
-                }
-            }
-        ]);
-        monacoEditor.revealLineInCenter(lineNum);
-    }
-
-    function clearErrorHighlight() {
-        errorDecorations = monacoEditor.deltaDecorations(errorDecorations, []);
-        const errCard = document.getElementById('error-card-element');
-        if (errCard) errCard.remove();
-    }
-
-    function renderErrorCard() {
-        const consoleOut = document.getElementById('console-output');
-        const card = document.createElement('div');
-        card.id = 'error-card-element';
-        card.className = 'error-card';
-        card.innerHTML = `
-            <div class="error-card-header">
-                <span>🚨 Une erreur est survenue pendant l'exécution</span>
-                <button class="error-copy-btn" onclick="copyErrorToClipboard()">📋 Copier l'erreur</button>
-            </div>
-            <div>Examinez la ligne surlignée en rouge dans l'éditeur ci-dessus.</div>
-        `;
-        consoleOut.appendChild(card);
-        consoleOut.scrollTop = consoleOut.scrollHeight;
-    }
-
-    function copyErrorToClipboard() {
-        navigator.clipboard.writeText(currentTraceback).then(() => {
-            alert("Erreur copiée dans le presse-papier !");
-        });
-    }
-
-    function setViewMode(mode) {
-        const workspace = document.getElementById('workspace');
-        workspace.classList.remove('fullscreen-editor', 'fullscreen-console');
-    
-        if (mode === 'editor') {
-            workspace.classList.add('fullscreen-editor');
-        } else if (mode === 'console') {
-            workspace.classList.add('fullscreen-console');
-        }
-    
-    // Recalcule la taille de l'éditeur Monaco immédiatement
-        setTimeout(() => {
-            if (monacoEditor) monacoEditor.layout();
-        }, 50);
     }
 
     function openPipModal() { document.getElementById('pip-modal').style.display = 'flex'; }
     function closePipModal() { document.getElementById('pip-modal').style.display = 'none'; }
-    
+
     async function installPipPackage() {
         const pkg = document.getElementById('pip-package-input').value.trim();
         if (!pkg) return;
         closePipModal();
         
-        clearConsole();
         const consoleOut = document.getElementById('console-output');
-        consoleOut.innerText = `Installation de ${pkg} via pip...\n`;
+        consoleOut.innerText = `📦 Installation de ${pkg} via pip...\n`;
         
         const res = await fetch('/install_package', {
             method: 'POST',
@@ -524,7 +476,7 @@
         });
         const data = await res.json();
         if (data.status === 'success') {
-            alert("Projet sauvegardé !");
+            alert("Projet sauvegardé dans la base de données !");
             window.location.reload();
         }
     }
